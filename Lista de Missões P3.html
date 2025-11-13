@@ -1,0 +1,222 @@
+<!doctype html>
+
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Checklist Interativo - Documentação</title>
+  <style>
+    :root{--bg:#f6f7f9;--card:#ffffff;--muted:#6b7280;--accent:#e11d48;--success:#10b981}
+    *{box-sizing:border-box}
+    body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; margin:0; background:linear-gradient(180deg,var(--bg),#eef2f6); color:#111}
+    .app{max-width:760px;margin:28px auto;padding:20px}
+    header{display:flex;gap:12px;align-items:center}
+    .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,#ff7a7a,#ff3b6b);display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+    h1{font-size:20px;margin:0}
+    p.lead{color:var(--muted);margin:6px 0 18px}
+    .card{background:var(--card);border-radius:14px;padding:16px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}.controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+button{border:0;background:#111;color:white;padding:10px 12px;border-radius:10px;cursor:pointer}
+button.ghost{background:transparent;color:var(--muted);border:1px solid #e6e7eb}
+button.primary{background:var(--accent)}
+
+.progress{height:10px;background:#eee;border-radius:999px;overflow:hidden;margin:12px 0}
+.progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--success),#60a5fa);width:0}
+
+ul.checklist{list-style:none;margin:0;padding:0}
+li.item{display:flex;align-items:flex-start;gap:12px;padding:12px;border-bottom:1px dashed #eef2f6}
+label.chk{display:flex;align-items:center;gap:12px;cursor:pointer;flex:1}
+input[type=checkbox]{width:20px;height:20px;border-radius:6px;appearance:none;border:2px solid #d1d5db;background:white;display:inline-block;position:relative}
+input[type=checkbox]:checked{background:linear-gradient(135deg,var(--accent),#ff7a7a);border-color:transparent}
+.meta{display:flex;flex-direction:column;gap:6px}
+.title{font-weight:600}
+.when{font-size:13px;color:var(--muted)}
+
+.obs{margin-left:46px;margin-top:8px;display:flex;gap:8px}
+textarea{flex:1;padding:8px;border-radius:8px;border:1px solid #e6e7eb;min-height:48px}
+.small{font-size:13px;color:var(--muted)}
+
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.footer{margin-top:14px;display:flex;justify-content:space-between;align-items:center}
+
+@media(max-width:520px){.app{padding:14px}.logo{width:48px;height:48px}}
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="logo">DOC</div>
+      <div>
+        <h1>Checklist Interativo — Documentação (Novembro)</h1>
+        <p class="lead">Marque os itens concluídos. As mudanças são salvas automaticamente no seu navegador.</p>
+      </div>
+    </header><div class="card" id="card">
+  <div class="controls">
+    <button class="primary" id="exportCsv">Exportar CSV</button>
+    <button id="exportJson" class="ghost">Exportar JSON</button>
+    <button id="clearAll" class="ghost">Limpar marcadores</button>
+    <button id="print" class="ghost">Imprimir</button>
+  </div>
+
+  <div class="progress" aria-hidden><i id="progressBar"></i></div>
+
+  <ul class="checklist" id="checklist"></ul>
+
+  <div class="footer">
+    <div class="small">Salvamento: <span id="saveStatus">Última alteração agora</span></div>
+    <div class="small">Progresso: <strong id="percent">0%</strong></div>
+  </div>
+</div>
+
+  </div> <script>
+    // Lista de itens (traduzida da imagem)
+    const ITEMS = [
+      {id:1, title:'Ocorrência Destaque', when:'até dia 22 de todo mês'},
+      {id:2, title:'PM do Mês Oper.', when:'até 1º dia útil'},
+      {id:3, title:'PM do Mês Adm', when:'até 1º dia útil'},
+      {id:4, title:'Contr. Ind. (PS)', when:'até 2º dia útil'},
+      {id:5, title:'QMO Mensal', when:'até 2º dia útil'},
+      {id:6, title:'QMO Rural', when:'até 2º dia útil'},
+      {id:7, title:'PMs Partic. ICC', when:'todo dia 01 e 16'},
+      {id:8, title:'Controle de Remoções de Veículos', when:'até dia 03 de cada mês'},
+      {id:9, title:'Policiamento Escolar', when:'até dia 03'},
+      {id:10, title:'Segurança Escolar DPCDH', when:'até dia 03'},
+      {id:11, title:'Planilha Trimestral Pol. Comunitário', when:'enviar em abril, julho, outubro e janeiro'},
+      {id:12, title:'Planilha Consumo de AIT e CRR', when:'até dia 02 de cada mês'},
+      {id:13, title:'Dados sobre Atividade Delegada', when:'último dia do mês'},
+      {id:14, title:'Planilha de Atualização de Dados', when:'até dia 02 de cada mês'},
+      {id:15, title:'Planilha de Aniversariante', when:'todo dia 15 de cada mês'},
+      {id:16, title:'Controle MBA/MP/BD', when:'até 5º dia útil'},
+      {id:17, title:'Controle de Disque Denúncia', when:'atentar ao prazo que vem em anexo'},
+      {id:18, title:'Registro Fotográfico (pendrive)', when:'até 5º dia útil'}
+    ];
+
+    const STORAGE_KEY = 'checklist_documentacao_novembro_v1';
+
+    function $(sel){return document.querySelector(sel)}
+    const checklistEl = $('#checklist');
+    const progressBar = $('#progressBar');
+    const percentEl = $('#percent');
+    const saveStatus = $('#saveStatus');
+
+    // Carrega estado do localStorage
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return {};
+        return JSON.parse(raw);
+      }catch(e){console.warn(e);return {}}
+    }
+
+    function saveState(state){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      saveStatus.textContent = 'Última alteração: ' + new Date().toLocaleString();
+    }
+
+    const state = loadState();
+
+    function render(){
+      checklistEl.innerHTML = '';
+      ITEMS.forEach(it => {
+        const itemState = state[it.id] || {};
+        const li = document.createElement('li'); li.className='item';
+        li.innerHTML = `
+          <label class="chk">
+            <input type="checkbox" data-id="${it.id}" ${itemState.checked? 'checked':''} />
+            <div class="meta">
+              <div class="title">${it.title}</div>
+              <div class="when">${it.when}</div>
+            </div>
+          </label>
+        `;
+        // Observação
+        const obsWrap = document.createElement('div'); obsWrap.className='obs';
+        const ta = document.createElement('textarea');
+        ta.placeholder = 'Observação (opcional)';
+        ta.dataset.id = it.id;
+        ta.value = itemState.obs || '';
+        obsWrap.appendChild(ta);
+        li.appendChild(obsWrap);
+        checklistEl.appendChild(li);
+      });
+      attachHandlers();
+      updateProgress();
+    }
+
+    function attachHandlers(){
+      checklistEl.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', onToggle));
+      checklistEl.querySelectorAll('textarea').forEach(ta => ta.addEventListener('input', onObs));
+    }
+
+    function onToggle(e){
+      const id = e.target.dataset.id;
+      if(!state[id]) state[id] = {};
+      state[id].checked = e.target.checked;
+      saveState(state);
+      updateProgress();
+    }
+
+    function onObs(e){
+      const id = e.target.dataset.id;
+      if(!state[id]) state[id] = {};
+      state[id].obs = e.target.value;
+      // debounce small save
+      if(window._saveTimeout) clearTimeout(window._saveTimeout);
+      window._saveTimeout = setTimeout(()=> saveState(state), 600);
+    }
+
+    function updateProgress(){
+      const total = ITEMS.length;
+      const done = ITEMS.reduce((acc,it)=> acc + (state[it.id] && state[it.id].checked?1:0),0);
+      const pct = Math.round((done/total)*100);
+      progressBar.style.width = pct + '%';
+      percentEl.textContent = pct + '%';
+    }
+
+    // Export CSV
+    function exportCSV(){
+      const rows = [['id','item','quando','concluido','observacao']];
+      ITEMS.forEach(it => {
+        const s = state[it.id] || {};
+        rows.push([it.id, it.title, it.when, s.checked? 'SIM':'NÃO', (s.obs||'')]);
+      });
+      const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+      const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download = 'checklist_documentacao_novembro.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    function exportJSON(){
+      const out = {};
+      ITEMS.forEach(it=> out[it.id] = {title:it.title, when:it.when, state: state[it.id] || {}});
+      const blob = new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download = 'checklist_documentacao_novembro.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    // Clear checks
+    function clearAll(){
+      if(!confirm('Limpar todas as marcações e observações?')) return;
+      for(const k in state) delete state[k];
+      saveState(state);
+      render();
+    }
+
+    // Print
+    function doPrint(){
+      const w = window.open('', '_blank');
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Imprimir Checklist</title><style>body{font-family:Inter, Arial;padding:20px}h1{font-size:18px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ccc;padding:8px;text-align:left}</style></head><body><h1>Checklist - Documentação (Novembro)</h1><table><thead><tr><th>Item</th><th>Quando</th><th>Concluído</th><th>Observação</th></tr></thead><tbody>${ITEMS.map(it=>`<tr><td>${it.title}</td><td>${it.when}</td><td>${(state[it.id] && state[it.id].checked)?'SIM':'NÃO'}</td><td>${(state[it.id] && state[it.id].obs)?state[it.id].obs:''}</td></tr>`).join('')}</tbody></table></body></html>`;w.document.write(html); w.document.close(); w.focus(); w.print();
+}
+
+// Event listeners for controls
+document.getElementById('exportCsv').addEventListener('click', exportCSV);
+document.getElementById('exportJson').addEventListener('click', exportJSON);
+document.getElementById('clearAll').addEventListener('click', clearAll);
+document.getElementById('print').addEventListener('click', doPrint);
+
+// Initial render
+render();
+
+  </script>
+</body>
+</html>
